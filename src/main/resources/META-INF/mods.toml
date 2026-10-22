@@ -15,9 +15,17 @@ mandatory = true #mandatory
 versionRange = "${forge_version_range}" #mandatory
 ordering = "NONE"
 side = "BOTH"# Here's another dependency
+
 [[dependencies."${mod_id}"]]
 modId = "minecraft"
 mandatory = true
 versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
+
+[[dependencies."${mod_id}"]]   # seer = ваш modId
+modId="openui_mc"
+mandatory=true
+versionRange="[0,)"
+ordering="NONE"
+side="CLIENT"

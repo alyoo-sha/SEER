@@ -10,12 +10,13 @@ public final class SearchQuery {
     private enum Field { NAME, MOD, TOOLTIP, TAG }
 
     private record Term(Field field, boolean negate, Pattern regex, String text) {
-        boolean matches(SeerStack s) {
+        // 1) Term.matches: теперь работает с Entry / Term.matches now works on Entry
+        boolean matches(SeerIndex.Entry e) {
             boolean hit = switch (field) {
-                case NAME -> test(s.searchName());
-                case MOD -> test(s.searchMod());
-                case TOOLTIP -> test(s.searchTooltip());
-                case TAG -> s.searchTags().stream().anyMatch(this::test);
+                case NAME -> test(e.name());
+                case MOD -> test(e.mod());
+                case TOOLTIP -> test(e.tooltip());
+                case TAG -> e.tags().stream().anyMatch(this::test);
             };
             return hit != negate;
         }
@@ -31,11 +32,12 @@ public final class SearchQuery {
 
     public boolean isEmpty() { return clauses.isEmpty(); }
 
-    public boolean test(SeerStack s) {
+    // 2) SearchQuery.test: сигнатура и вызов / signature and call
+    public boolean test(SeerIndex.Entry e) {
         outer:
         for (List<Term> alternatives : clauses) {
             for (Term t : alternatives) {
-                if (t.matches(s)) continue outer;
+                if (t.matches(e)) continue outer;
             }
             return false;
         }
