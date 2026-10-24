@@ -6,6 +6,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.*;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -34,12 +35,26 @@ final class VanillaRecipeLoader {
         List<SeerStack> outputs = List.of(SeerStack.of(result));
 
         if (recipe instanceof ShapedRecipe shaped) {
-            return new SeerRecipe(recipe.getId(), SeerCategory.CRAFTING, ingredients(shaped.getIngredients()),
-                    outputs, shaped.getWidth(), shaped.getHeight(), 0, 0f);
+            // Сетка не меньше 3x3, рецепт кладётся в левый верхний угол, как в верстаке.
+            // The grid is at least 3x3, the recipe goes in the top-left corner, as in the crafting table.
+            int cols = Math.max(3, shaped.getWidth());
+            int rows = Math.max(3, shaped.getHeight());
+            List<SeerIngredient> grid = new ArrayList<>(Collections.nCopies(cols * rows, SeerIngredient.EMPTY));
+            List<Ingredient> source = shaped.getIngredients();
+            for (int row = 0; row < shaped.getHeight(); row++) {
+                for (int col = 0; col < shaped.getWidth(); col++) {
+                    grid.set(row * cols + col, SeerIngredient.of(source.get(row * shaped.getWidth() + col)));
+                }
+            }
+            return new SeerRecipe(recipe.getId(), SeerCategory.CRAFTING, grid, outputs, cols, rows, 0, 0f);
         }
         if (recipe instanceof ShapelessRecipe) {
-            return new SeerRecipe(recipe.getId(), SeerCategory.CRAFTING, ingredients(recipe.getIngredients()),
-                    outputs, 0, 0, 0, 0f);
+            // Бесформенный рецепт заполняет сетку 3x3 подряд. / A shapeless recipe fills the 3x3 grid in order.
+            List<Ingredient> source = recipe.getIngredients();
+            int rows = Math.max(3, (source.size() + 2) / 3);
+            List<SeerIngredient> grid = new ArrayList<>(Collections.nCopies(3 * rows, SeerIngredient.EMPTY));
+            for (int i = 0; i < source.size(); i++) grid.set(i, SeerIngredient.of(source.get(i)));
+            return new SeerRecipe(recipe.getId(), SeerCategory.CRAFTING, grid, outputs, 3, rows, 0, 0f);
         }
         if (recipe instanceof AbstractCookingRecipe cooking) {
             RecipeType<?> type = recipe.getType();

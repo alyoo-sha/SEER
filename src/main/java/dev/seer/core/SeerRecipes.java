@@ -16,6 +16,8 @@ public final class SeerRecipes {
     private static volatile Map<SeerCategory, List<SeerStack>> workstations = Map.of();
     private static volatile Map<SeerStack, List<SeerRecipe>> byOutput = Map.of();
     private static volatile Map<SeerStack, List<SeerRecipe>> byInput = Map.of();
+    private static volatile Map<SeerCategory, List<SeerRecipe>> byCategory = Map.of();
+    private static volatile Map<SeerStack, List<SeerCategory>> servedBy = Map.of();
 
     private SeerRecipes() {}
 
@@ -35,6 +37,16 @@ public final class SeerRecipes {
     /** Рецепты, где этот предмет используется (клавиша U). / Recipes that use this stack (U key). */
     public static List<SeerRecipe> usesOf(SeerStack stack) {
         return byInput.getOrDefault(stack, List.of());
+    }
+
+    /** Все рецепты категории (что делается на станке). / All recipes of a category (what a machine makes). */
+    public static List<SeerRecipe> recipesIn(SeerCategory category) {
+        return byCategory.getOrDefault(category, List.of());
+    }
+
+    /** Категории, для которых этот предмет - станок. / Categories this stack is a workstation for. */
+    public static List<SeerCategory> categoriesServedBy(SeerStack stack) {
+        return servedBy.getOrDefault(stack, List.of());
     }
 
     /** Вызывать после SeerIndex.rebuild: кузнечный стол использует индекс. / Call after SeerIndex.rebuild: smithing uses the index. */
@@ -65,10 +77,20 @@ public final class SeerRecipes {
                 }
             }
         }
+
+        Map<SeerCategory, List<SeerRecipe>> inCategory = new HashMap<>();
+        for (SeerRecipe r : list) inCategory.computeIfAbsent(r.category(), k -> new ArrayList<>()).add(r);
+        Map<SeerStack, List<SeerCategory>> served = new HashMap<>();
+        for (SeerCategory c : cats) {
+            for (SeerStack station : ws.get(c)) served.computeIfAbsent(station, k -> new ArrayList<>()).add(c);
+        }
+
         all = List.copyOf(list);
         categories = List.copyOf(cats);
         workstations = ws;
         byOutput = out;
         byInput = in;
+        byCategory = inCategory;
+        servedBy = served;
     }
 }

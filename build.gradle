@@ -87,6 +87,9 @@ repositories {
       password = providers.gradleProperty("gpr.key").orNull
     }
   }
+  maven {
+    url "https://api.modrinth.com/maven"
+  }
 }
 
 dependencies {
@@ -94,6 +97,8 @@ dependencies {
 
   //OpenUI MC
   implementation fg.deobf("com.nstut:openui-mc-forge-1.20.1:0.0.15") //MIT
+
+  implementation fg.deobf("maven.modrinth:mekanism:uxe1WQp4") //
 
   // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
   // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime

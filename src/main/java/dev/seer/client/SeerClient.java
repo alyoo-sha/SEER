@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
+import static dev.seer.Seer.modBus;
+
 public final class SeerClient {
     // Плагины находятся один раз при старте клиента.
     // Plugins are discovered once at client startup.
@@ -39,7 +41,6 @@ public final class SeerClient {
     private SeerClient() {}
 
     public static void init() {
-        IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         modBus.addListener(SeerClient::onClientSetup);
         MinecraftForge.EVENT_BUS.addListener(SeerClient::onRecipesUpdated);
         MinecraftForge.EVENT_BUS.addListener(SeerClient::onCommands);
@@ -48,6 +49,7 @@ public final class SeerClient {
     private static void onClientSetup(FMLClientSetupEvent e) {
         plugins = List.copyOf(SeerPluginLoader.discover());
         Seer.LOGGER.info("SEER: {} plugin(s) discovered", plugins.size());
+        e.enqueueWork(SeerState::init); // читаем конфиг после его загрузки / read the config after it is loaded
     }
 
     private static void onRecipesUpdated(RecipesUpdatedEvent e) {
