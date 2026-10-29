@@ -4,27 +4,50 @@ import com.nstut.openui.api.UIComponent;
 import dev.seer.core.SeerIngredient;
 import dev.seer.core.SeerRecipe;
 import dev.seer.core.SeerStack;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.network.chat.Component;
 
 /**
  * Страница карточек рецептов. Число колонок и строк считается по размеру компонента каждый кадр,
- * смена страницы не пересоздаёт интерфейс.
+ * смена страницы не пересоздаёт интерфейс. Внизу карточки: перенос, избранное, дерево крафта.
  * A page of recipe cards. Columns and rows are computed from the component size every frame;
- * changing the page never rebuilds the UI.
+ * changing the page never rebuilds the UI. Card footer: transfer, favorite, crafting tree.
  */
 final class RecipePageView extends UIComponent {
+    /** Действия кнопок на карточке. / Actions of the card buttons. */
+    interface Actions {
+        boolean transferAvailable(SeerRecipe recipe);
+        boolean transferReady(SeerRecipe recipe);
+        void transfer(SeerRecipe recipe, boolean max);
+        boolean isFavorite(SeerRecipe recipe);
+        void toggleFavorite(SeerRecipe recipe);
+        void openTree(SeerRecipe recipe);
+    }
+
+    private enum Kind { TRANSFER, FAVORITE, TREE }
+
+    private record CardButton(int x, int y, Kind kind, SeerRecipe recipe) {}
+
     private static final int SLOT = 18;
     private static final int GAP = 4;
     private static final int PAD = 6;
     private static final int ARROW = 12;
     private static final int EXTRA_LINE = 10;
+    private static final int BUTTON = 12;
+    private static final int BUTTON_GAP = 3;
 
     private final Consumer<SeerStack> hoverSink;
+    private final Consumer<List<Component>> tooltipSink;
+    private final Actions actions;
+    private final List<CardButton> buttons = new ArrayList<>();
 
     private List<SeerRecipe> recipes = List.of();
     private int page = 0;
@@ -36,8 +59,10 @@ final class RecipePageView extends UIComponent {
     private int cardH = 0;
     private int perPage = 1;
 
-    RecipePageView(Consumer<SeerStack> hoverSink) {
+    RecipePageView(Consumer<SeerStack> hoverSink, Consumer<List<Component>> tooltipSink, Actions actions) {
         this.hoverSink = hoverSink;
+        this.tooltipSink = tooltipSink;
+        this.actions = actions;
     }
 
     /** Новый список; размер карточки считается сразу по самому большому рецепту. / New list; card size is computed up front from the biggest recipe. */
@@ -55,8 +80,10 @@ final class RecipePageView extends UIComponent {
             maxOutputRows = Math.max(maxOutputRows, r.outputs().size());
             extras |= r.cookTime() > 0;
         }
-        cardW = PAD * 2 + maxInputCols * SLOT + GAP + ARROW + GAP + SLOT;
-        cardH = PAD * 2 + Math.max(maxInputRows, maxOutputRows) * SLOT + (extras ? EXTRA_LINE : 0);
+        int contentW = maxInputCols * SLOT + GAP + ARROW + GAP + SLOT;
+        int buttonsW = 3 * BUTTON + 2 * BUTTON_GAP;
+        cardW = PAD * 2 + Math.max(contentW, buttonsW);
+        cardH = PAD + Math.max(maxInputRows, maxOutputRows) * SLOT + (extras ? EXTRA_LINE : 0) + 2 + BUTTON + 3;
     }
 
     int page() { return page; }
@@ -89,6 +116,7 @@ final class RecipePageView extends UIComponent {
     @Override
     public void render(GuiGraphics g, Font font, int mx, int my, float pt) {
         if (!visible) return;
+        buttons.clear();
         if (recipes.isEmpty()) {
             g.drawCenteredString(font, "No recipes", x + width / 2, y + height / 2 - 4, Palette.MUTED);
             return;
@@ -145,16 +173,77 @@ final class RecipePageView extends UIComponent {
             g.drawString(font, String.format(Locale.ROOT, "%.1f s  %.2f XP", r.cookTime() / 20.0, r.experience()),
                     cx + PAD, y0 + blockH + 1, Palette.MUTED, false);
         }
+        drawFooter(g, r, cx, cy, cellW, mx, my);
+    }
+
+    // Кнопки внизу карточки справа: перенос (если доступен), избранное, дерево крафта.
+    // Buttons at the bottom right of the card: transfer (if available), favorite, crafting tree.
+    private void drawFooter(GuiGraphics g, SeerRecipe r, int cx, int cy, int cellW, int mx, int my) {
+        List<Kind> kinds = new ArrayList<>();
+        if (actions.transferAvailable(r)) kinds.add(Kind.TRANSFER);
+        kinds.add(Kind.FAVORITE);
+        kinds.add(Kind.TREE);
+
+        int total = kinds.size() * BUTTON + (kinds.size() - 1) * BUTTON_GAP;
+        int bx = cx + cellW - 4 - total;
+        int by = cy + cardH - BUTTON - 3;
+        for (Kind kind : kinds) {
+            boolean over = mx >= bx && mx < bx + BUTTON && my >= by && my < by + BUTTON;
+            drawCardButton(g, kind, bx, by, r, over);
+            buttons.add(new CardButton(bx, by, kind, r));
+            if (over) tooltipSink.accept(buttonTooltip(kind, r));
+            bx += BUTTON + BUTTON_GAP;
+        }
+    }
+
+    private void drawCardButton(GuiGraphics g, Kind kind, int bx, int by, SeerRecipe r, boolean over) {
+        int face;
+        if (kind == Kind.TRANSFER) {
+            face = actions.transferReady(r) ? (over ? 0xFF4FAE6E : 0xFF3E8E57) : 0xFF4A4C5A;
+        } else {
+            face = over ? Palette.BUTTON_HOVER : Palette.BUTTON_FACE;
+        }
+        g.fill(bx, by, bx + BUTTON, by + BUTTON, Palette.BUTTON_OUTLINE);
+        g.fill(bx + 1, by + 1, bx + BUTTON - 1, by + BUTTON - 1, face);
+        g.fill(bx + 1, by + 1, bx + BUTTON - 1, by + 2, 0x55FFFFFF);
+        g.fill(bx + 1, by + 1, bx + 2, by + BUTTON - 1, 0x55FFFFFF);
+        g.fill(bx + 1, by + BUTTON - 2, bx + BUTTON - 1, by + BUTTON - 1, 0x55000000);
+        g.fill(bx + BUTTON - 2, by + 1, bx + BUTTON - 1, by + BUTTON - 1, 0x55000000);
+
+        switch (kind) {
+            case TRANSFER -> {
+                int sign = actions.transferReady(r) ? 0xFFFFFFFF : 0xFF8A8C9A;
+                g.fill(bx + 5, by + 3, bx + 7, by + 9, sign);
+                g.fill(bx + 3, by + 5, bx + 9, by + 7, sign);
+            }
+            case FAVORITE -> Icons.starButton(g, bx, by, BUTTON, BUTTON, over, actions.isFavorite(r));
+            case TREE -> Icons.tree(g, bx, by, BUTTON, BUTTON, over);
+        }
+    }
+
+    private List<Component> buttonTooltip(Kind kind, SeerRecipe r) {
+        return switch (kind) {
+            case TRANSFER -> actions.transferReady(r)
+                    ? List.of(Component.literal("Fill the grid"),
+                    Component.literal("Shift: as many as possible").withStyle(ChatFormatting.GRAY))
+                    : List.of(Component.literal("Missing ingredients").withStyle(ChatFormatting.RED));
+            case FAVORITE -> List.of(Component.literal(
+                    actions.isFavorite(r) ? "Remove from favorites" : "Add to favorites"));
+            case TREE -> List.of(Component.literal("Crafting tree"),
+                    Component.literal("Coming soon").withStyle(ChatFormatting.GRAY));
+        };
     }
 
     private void drawSlot(GuiGraphics g, int sx, int sy, SeerStack stack, int mx, int my) {
+        // Вдавленный слот. / A recessed slot.
         g.fill(sx, sy, sx + SLOT, sy + SLOT, Palette.SLOT);
-        g.fill(sx, sy, sx + SLOT, sy + 1, Palette.SLOT_SHADOW);                // тень сверху / top shadow
-        g.fill(sx, sy, sx + 1, sy + SLOT, Palette.SLOT_SHADOW);                // тень слева / left shadow
-        g.fill(sx, sy + SLOT - 1, sx + SLOT, sy + SLOT, Palette.SLOT_LIGHT);   // блик снизу / bottom light
-        g.fill(sx + SLOT - 1, sy, sx + SLOT, sy + SLOT, Palette.SLOT_LIGHT);   // блик справа / right light
+        g.fill(sx, sy, sx + SLOT, sy + 1, Palette.SLOT_SHADOW);
+        g.fill(sx, sy, sx + 1, sy + SLOT, Palette.SLOT_SHADOW);
+        g.fill(sx, sy + SLOT - 1, sx + SLOT, sy + SLOT, Palette.SLOT_LIGHT);
+        g.fill(sx + SLOT - 1, sy, sx + SLOT, sy + SLOT, Palette.SLOT_LIGHT);
         if (stack == null) return;
         StackRenderer.render(g, stack, sx + 1, sy + 1);
+        if (SeerFavorites.contains(stack)) Icons.favoriteMark(g, sx + 12, sy + 1);
         if (mx >= sx && mx < sx + SLOT && my >= sy && my < sy + SLOT) {
             g.fillGradient(RenderType.guiOverlay(), sx + 1, sy + 1, sx + SLOT - 1, sy + SLOT - 1, 0x80FFFFFF, 0x80FFFFFF, 0);
             hoverSink.accept(stack);
@@ -168,5 +257,31 @@ final class RecipePageView extends UIComponent {
             int half = 4 - i;
             g.fill(ax + 7 + i, cy - half, ax + 8 + i, cy + half + 1, Palette.MUTED);
         }
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button != 0) return false;
+        for (CardButton b : buttons) {
+            if (mouseX < b.x() || mouseX >= b.x() + BUTTON || mouseY < b.y() || mouseY >= b.y() + BUTTON) continue;
+            switch (b.kind()) {
+                case TRANSFER -> {
+                    if (actions.transferReady(b.recipe())) {
+                        BevelButton.playClick();
+                        actions.transfer(b.recipe(), Screen.hasShiftDown());
+                    }
+                }
+                case FAVORITE -> {
+                    BevelButton.playClick();
+                    actions.toggleFavorite(b.recipe());
+                }
+                case TREE -> {
+                    BevelButton.playClick();
+                    actions.openTree(b.recipe());
+                }
+            }
+            return true;
+        }
+        return false;
     }
 }

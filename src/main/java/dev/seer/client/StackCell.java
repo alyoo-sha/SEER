@@ -61,6 +61,7 @@ final class StackCell extends UIComponent {
         int sx = x + (width - 16) / 2;
         int sy = y + (height - 16) / 2;
         StackRenderer.render(g, stack, sx, sy);
+        if (SeerFavorites.contains(stack)) Icons.favoriteMark(g, sx + 11, sy);
         if (mx >= x && mx < x + width && my >= y && my < y + height) {
             g.fill(sx, sy, sx + 16, sy + 16, 0x80FFFFFF);
             hoverSink.accept(stack);

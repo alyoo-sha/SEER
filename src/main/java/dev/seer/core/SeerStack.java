@@ -3,6 +3,7 @@ package dev.seer.core;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -69,6 +70,17 @@ public final class SeerStack {
         FluidStack copy = fluid.copy();
         copy.setAmount((int) Math.min(amount, Integer.MAX_VALUE));
         return copy;
+    }
+
+    /** Копия NBT или null. / A copy of the NBT or null. */
+    public CompoundTag tag() {
+        CompoundTag tag = nbt();
+        return tag == null ? null : tag.copy();
+    }
+
+    /** Тип предмета без копирования стека. / The item type without copying the stack. */
+    public Item itemType() {
+        return item.getItem();
     }
 
     public Component displayName() {

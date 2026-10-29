@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
  */
 public final class SeerSettingsScreen extends UiScreen {
     private static final int W = 220;
-    private static final int H = 120;
+    private static final int H = 150;
 
     private final Screen parent;
 
@@ -30,9 +30,11 @@ public final class SeerSettingsScreen extends UiScreen {
 
     @Override
     protected UIComponent buildUI() {
-        return Ui.card(Ui.padding(8, Ui.column(
+        return new SeerFrame(Ui.padding(8, Ui.column(
                 Ui.heading("SEER"),
                 Ui.checkbox("Show item panel", SeerState.VISIBLE),
+                Ui.text("Panel opacity"),
+                Ui.slider(SeerState.OPACITY, 30, 100),
                 Ui.spacer().flex(),
                 // Закрываем отложенно: нельзя закрывать экран внутри обработчика его рантайма.
                 // Deferred close: a screen must not be closed inside its own runtime's handler.
@@ -44,6 +46,12 @@ public final class SeerSettingsScreen extends UiScreen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         renderBackground(g);
         super.render(g, mx, my, pt);
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        SeerState.flush();
     }
 
     @Override public void onClose() { minecraft.setScreen(parent); }

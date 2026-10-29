@@ -22,9 +22,7 @@ import net.minecraft.world.item.Items;
 import net.minecraftforge.client.event.RecipesUpdatedEvent;
 import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.List;
@@ -47,6 +45,7 @@ public final class SeerClient {
     }
 
     private static void onClientSetup(FMLClientSetupEvent e) {
+        e.enqueueWork(SeerFavorites::load);
         plugins = List.copyOf(SeerPluginLoader.discover());
         Seer.LOGGER.info("SEER: {} plugin(s) discovered", plugins.size());
         e.enqueueWork(SeerState::init); // читаем конфиг после его загрузки / read the config after it is loaded
@@ -65,7 +64,7 @@ public final class SeerClient {
                 Seer.LOGGER.error("SEER: plugin {} failed", plugin.getClass().getName(), ex);
             }
         }
-        SeerIndex.rebuild(registry.stacks());
+        SeerIndex.rebuild(CreativeVariants.collect(), registry.stacks());
         long indexMs = (System.nanoTime() - t) / 1_000_000;
         SeerRecipes.rebuild(e.getRecipeManager(), connection.registryAccess(), registry);
 

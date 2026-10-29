@@ -42,15 +42,27 @@ public final class SeerIndex {
     public static Set<String> tags() { return tags; }
 
     /**
-     * @param extra дополнительные стеки от плагинов (например, зелья с NBT)
-     *              extra stacks from plugins (e.g. potions with NBT)
+     * @param creative стеки творческих вкладок (варианты NBT, порядок креатива)
+     *                 creative tab stacks (NBT variants, creative order)
+     * @param extra    дополнительные стеки от плагинов / extra stacks from plugins
      */
-    public static void rebuild(List<SeerStack> extra) {
+    public static void rebuild(List<SeerStack> creative, List<SeerStack> extra) {
         List<Entry> list = new ArrayList<>();
         Set<SeerStack> seen = new HashSet<>();
+        Set<Item> covered = new HashSet<>();
 
+        // Сначала креатив: так порядок знакомый, а у зелий и книг есть все варианты.
+        // Creative first: the order is familiar and potions and books get all their variants.
+        for (SeerStack s : creative) {
+            if (s.kind() == SeerStack.Kind.ITEM && seen.add(s)) {
+                list.add(makeEntry(s));
+                covered.add(s.itemType());
+            }
+        }
+        // Предметы вне вкладок, а у покрытых предметов "пустой" вариант без NBT не нужен.
+        // Items outside the tabs; covered items do not need a plain NBT-less variant.
         for (Item item : ForgeRegistries.ITEMS) {
-            if (item == Items.AIR) continue;
+            if (item == Items.AIR || covered.contains(item)) continue;
             SeerStack s = SeerStack.of(new ItemStack(item));
             if (seen.add(s)) list.add(makeEntry(s));
         }
@@ -65,14 +77,22 @@ public final class SeerIndex {
 
         Set<String> modSet = new TreeSet<>();
         Set<String> tagSet = new TreeSet<>();
+        Map<SeerStack, Entry> lookup = new HashMap<>();
         for (Entry e : list) {
             modSet.add(e.stack().id().getNamespace());
             tagSet.addAll(e.tags());
+            lookup.put(e.stack(), e);
         }
         entries = List.copyOf(list);
         stacks = list.stream().map(Entry::stack).toList();
         mods = Collections.unmodifiableSet(modSet);
         tags = Collections.unmodifiableSet(tagSet);
+        byStack = lookup;
+    }
+
+    /** Есть ли такой стек в индексе (с учётом NBT). / Whether the index has this stack (NBT included). */
+    public static boolean contains(SeerStack stack) {
+        return byStack.containsKey(stack);
     }
 
     public static List<SeerStack> search(String text) {
@@ -99,6 +119,19 @@ public final class SeerIndex {
             tags = tagNames(s.fluidStack().getFluid().builtInRegistryHolder().tags());
         }
         return new Entry(s, name, mod, tooltip, tags);
+    }
+
+    private static volatile Map<SeerStack, Entry> byStack = Map.of();
+
+    /** Поиск внутри заданного набора. Пустой запрос возвращает набор целиком. / Search within a given set. An empty query returns the whole set. */
+    public static List<SeerStack> filter(Collection<SeerStack> subset, String text) {
+        SearchQuery q = SearchQuery.parse(text);
+        if (q.isEmpty()) return List.copyOf(subset);
+        Map<SeerStack, Entry> lookup = byStack;
+        return subset.stream().filter(stack -> {
+            Entry entry = lookup.get(stack);
+            return entry != null && q.test(entry);
+        }).toList();
     }
 
     private static String tooltipOf(ItemStack stack, String fallback) {

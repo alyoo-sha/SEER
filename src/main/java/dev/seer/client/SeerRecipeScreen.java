@@ -15,6 +15,8 @@ import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -177,7 +179,7 @@ public final class SeerRecipeScreen extends UiScreen {
     @Override
     protected UIComponent buildUI() {
         int keepPage = view == null ? 0 : view.page();
-        view = new RecipePageView(stack -> hovered = stack);
+        view = new RecipePageView(stack -> hovered = stack, lines -> tabHover = lines, actions());
         tabs = new TabsBar(uiWidth() * 6 / 10, () -> categories, () -> categoryIndex,
                 this::selectCategory, this::openMachine, lines -> tabHover = lines);
         sync(keepPage);
@@ -194,14 +196,37 @@ public final class SeerRecipeScreen extends UiScreen {
                 new BevelButton(20, 20, Icons::arrowRight, () -> view.step(1))
         ).align(Alignment.CENTER);
 
-        return Ui.card(Ui.padding(8, Ui.column(header, view.flex(), pager)
-                .gap(6).align(Alignment.STRETCH))).outlined(true);
+        return new SeerFrame(Ui.padding(8, Ui.column(header, view.flex(), pager)
+                .gap(6).align(Alignment.STRETCH)));
+    }
+
+    // Действия кнопок на карточке рецепта. / Actions of the recipe card buttons.
+    private RecipePageView.Actions actions() {
+        return new RecipePageView.Actions() {
+            @Override public boolean transferAvailable(SeerRecipe recipe) { return TransferClient.available(parent, recipe); }
+            @Override public boolean transferReady(SeerRecipe recipe) { return SeerCraftable.canCraft(recipe); }
+            @Override public void transfer(SeerRecipe recipe, boolean max) {
+                TransferClient.send(recipe, max);
+                Minecraft.getInstance().tell(SeerRecipeScreen.this::onClose);
+            }
+            @Override public boolean isFavorite(SeerRecipe recipe) {
+                return !recipe.outputs().isEmpty() && SeerFavorites.contains(recipe.outputs().get(0));
+            }
+            @Override public void toggleFavorite(SeerRecipe recipe) {
+                if (!recipe.outputs().isEmpty()) SeerFavorites.toggle(recipe.outputs().get(0));
+            }
+            @Override public void openTree(SeerRecipe recipe) {
+                var player = Minecraft.getInstance().player;
+                if (player != null) player.displayClientMessage(Component.literal("SEER: crafting tree is coming soon"), true);
+            }
+        };
     }
 
     // ---------------------------------------------------------------- input
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
+        SeerCraftable.update(false);
         hovered = null; // компоненты заново отметят себя / components re-mark themselves while rendering
         tabHover = null;
         renderBackground(g);
@@ -241,6 +266,10 @@ public final class SeerRecipeScreen extends UiScreen {
 
     @Override
     public boolean keyPressed(int key, int scanCode, int modifiers) {
+        if (hovered != null && key == GLFW.GLFW_KEY_A) {
+            SeerFavorites.toggle(hovered);
+            return true;
+        }
         if (hovered != null && (key == GLFW.GLFW_KEY_R || key == GLFW.GLFW_KEY_U)) {
             open(hovered, key == GLFW.GLFW_KEY_U);
             return true;

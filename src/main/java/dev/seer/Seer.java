@@ -2,6 +2,7 @@ package dev.seer;
 
 import com.mojang.logging.LogUtils;
 import dev.seer.client.SeerClient;
+import dev.seer.network.SeerNetwork;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -22,6 +23,7 @@ public final class Seer {
     public Seer(FMLJavaModLoadingContext context) {
         modBus = context.getModEventBus();
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, SeerConfig.SPEC);
+        SeerNetwork.init();
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> SeerClient::init);
     }
     public static ResourceLocation makeId(String path) {
